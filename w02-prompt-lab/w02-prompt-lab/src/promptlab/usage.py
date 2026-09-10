@@ -5,19 +5,44 @@ Implement this module by following assignments/W02_Day1_Assignment_LOCAL.md.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class CallRecord(BaseModel):
-    """One model-call attempt.
+    """One model-call attempt."""
 
-    Add the exact fields and types specified by the Day 1 assignment.
-    """
+    record_id: str
+    run_id: str
+    timestamp: datetime
+    provider: Literal["ollama"]
+    model_id: str
+    task: Literal["triage", "summarization", "extraction"]
+    case_id: str
+    prompt_id: str
+    prompt_version: str
+    attempt: int
+    temperature: float
+    max_output_tokens: int
+    input_tokens: int
+    output_tokens: int
+    cached_input_tokens: int | None
+    latency_ms: int
+    cost_usd: float
+    stop_reason: str | None
+    error_type: str | None
+    response_text: str | None
 
-    pass
+    @field_validator("timestamp")
+    @classmethod
+    def timestamp_must_be_utc(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("timestamp must be timezone-aware")
+        if value.utcoffset() != timedelta(0):
+            raise ValueError("timestamp must be UTC")
+        return value
 
 
 def compute_cost(model_id: str, input_tokens: int, output_tokens: int) -> float:
