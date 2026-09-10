@@ -1,0 +1,1 @@
+E12 was the shortest case at 228 input tokens and E11 the longest at 274, so token count rose with document length. Latency did not follow that order: E12 took 5094 ms and E11 took 4482 ms, likely because the first call paid model warmup. A short document alone is a poor workload estimate; longer inputs use more tokens, and latency also depends on cold start and output length.
