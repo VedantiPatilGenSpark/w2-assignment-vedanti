@@ -11,3 +11,7 @@ class TransientProviderError(Exception):
 
 class PermanentProviderError(Exception):
     """Raised when a provider call failed in a way that should not be retried."""
+
+
+class TruncatedResponseError(Exception):
+    """Raised when the model stopped because it hit the output token limit."""
