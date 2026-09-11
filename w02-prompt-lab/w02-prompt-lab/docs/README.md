@@ -18,8 +18,8 @@ uv run python -m promptlab.day2
 
 **Evidence (grader-facing names):**
 
-- `docs/day2-run.jsonl` — full 12×2 log for this experiment
-- `docs/day2-comparison.md` — counts, tokens, latency for this experiment
+- `docs/day2-run.jsonl` — full 12×2 log for this experiment (`run_id=1b032c0f-fc78-4cf1-9cab-3cfb212a990a`)
+- `docs/day2-comparison.md` — counts, tokens, latency for this experiment, plus experiment 2
 
 Working copy: `runs/{run_id}.jsonl` (gitignored). Copy into `docs/day2-run.jsonl` after the run.
 
@@ -37,7 +37,7 @@ uv run python -m promptlab.day2 --think false
 
 **Evidence (extra; does not replace experiment 1):**
 
-- `docs/day2-run-think-off.jsonl`
+- `docs/day2-run-think-off.jsonl` (`run_id=09e2aada-265c-43fa-b635-52f5e24ae786`)
 
 This is not a substitute for `docs/day2-run.jsonl`. It isolates whether Qwen3’s default thinking (not the summarization task alone) drove extra tokens, latency, and truncation in experiment 1.
 
