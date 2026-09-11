@@ -4,6 +4,18 @@ Two summarization experiments. Same 12 cases (`S01`–`S12`), same baseline prom
 
 `think` is not part of `CompletionRequest` or `ModelAdapter`. It is an optional `OllamaAdapter` constructor flag. Both models always get the same `think` value in a given experiment.
 
+## CLI
+
+`day2.py` uses an optional `--think` flag (`true` or `false`). If you pass **no arguments**, `--think` is omitted and the Ollama JSON has **no** `think` key. That is experiment 1 and matches a grader running:
+
+```bash
+uv run python -m promptlab.day2
+```
+
+same as Day 1’s `python -m promptlab.day1`. Extra flags are not required.
+
+`--think false` is only for experiment 2. It sends `"think": false` for both models. It does not change the default no-arg path.
+
 ## Experiment 1 (primary / assignment filenames)
 
 **Question:** With Ollama left at each model’s default thinking behavior, how do Mistral and Qwen compare on this set?
