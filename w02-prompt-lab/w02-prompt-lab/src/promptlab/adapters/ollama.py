@@ -23,12 +23,16 @@ REQUEST_TIMEOUT_SECONDS = 180.0
 
 
 class OllamaAdapter:
-    """One adapter class; Mistral vs Qwen is chosen by model_id at construction."""
+    """One adapter class; Mistral vs Qwen is chosen by model_id at construction.
+
+    think is Ollama-specific: None omits the field (provider default), True/False sends it.
+    """
 
     provider = "ollama"
 
-    def __init__(self, model_id: str) -> None:
+    def __init__(self, model_id: str, *, think: bool | None = None) -> None:
         self.model_id = model_id
+        self.think = think
         self._settings = Settings.from_env()
 
     def complete(self, request: CompletionRequest, run_id: str) -> CompletionResult:
@@ -43,15 +47,7 @@ class OllamaAdapter:
             try:
                 response = httpx.post(
                     f"{self._settings.ollama_base_url}/api/generate",
-                    json={
-                        "model": self.model_id,
-                        "prompt": _prompt_text(request),
-                        "stream": False,
-                        "options": {
-                            "temperature": request.temperature,
-                            "num_predict": request.max_output_tokens,
-                        },
-                    },
+                    json=self._generate_body(request),
                     timeout=REQUEST_TIMEOUT_SECONDS,
                 )
             except httpx.RequestError:
@@ -194,6 +190,20 @@ class OllamaAdapter:
             error_type=error_type,
             response_text=response_text,
         )
+
+    def _generate_body(self, request: CompletionRequest) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "model": self.model_id,
+            "prompt": _prompt_text(request),
+            "stream": False,
+            "options": {
+                "temperature": request.temperature,
+                "num_predict": request.max_output_tokens,
+            },
+        }
+        if self.think is not None:
+            body["think"] = self.think
+        return body
 
 
 def _prompt_text(request: CompletionRequest) -> str:
