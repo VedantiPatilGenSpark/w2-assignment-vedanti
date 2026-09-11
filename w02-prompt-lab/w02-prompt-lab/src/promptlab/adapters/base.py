@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Protocol
 
 from pydantic import BaseModel
 
@@ -29,3 +29,14 @@ class CompletionResult(BaseModel):
     text: str | None
     error_type: str | None
     records: list[CallRecord]
+
+
+class ModelAdapter(Protocol):
+    """Structural interface for a completion adapter."""
+
+    provider: str
+    model_id: str
+
+    def complete(self, request: CompletionRequest, run_id: str) -> CompletionResult:
+        """Run one completion, including retries, and return every attempt."""
+        ...
