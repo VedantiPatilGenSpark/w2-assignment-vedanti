@@ -6,6 +6,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from promptlab.usage import CallRecord
+
 
 class CompletionRequest(BaseModel):
     """Inbound completion envelope from a caller."""
@@ -18,3 +20,12 @@ class CompletionRequest(BaseModel):
     user_content: str
     temperature: float
     max_output_tokens: int
+
+
+class CompletionResult(BaseModel):
+    """Outbound result of one complete() call, including every attempt."""
+
+    succeeded: bool
+    text: str | None
+    error_type: str | None
+    records: list[CallRecord]
