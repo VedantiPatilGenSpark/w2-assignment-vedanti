@@ -7,3 +7,7 @@ class UnknownModelError(ValueError):
 
 class TransientProviderError(Exception):
     """Raised when a provider call failed for a temporary reason and may be retried."""
+
+
+class PermanentProviderError(Exception):
+    """Raised when a provider call failed in a way that should not be retried."""
