@@ -64,3 +64,11 @@ def test_schema_description_requires_evidence_field_value() -> None:
     assert "must include value" in text
     assert "null" in text
     assert "must include value" not in schema_description(TinyOutput)
+
+
+def test_schema_description_defines_citation_as_a_full_heading() -> None:
+    for model in (SummarizationOutput, PolicyExtraction):
+        text = schema_description(model)
+
+        assert "section heading copied" in text
+        assert "1. Document Control" in text

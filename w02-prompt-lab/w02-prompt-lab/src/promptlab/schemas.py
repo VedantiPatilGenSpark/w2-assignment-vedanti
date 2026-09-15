@@ -127,6 +127,13 @@ def schema_description(model: type[BaseModel]) -> str:
             "Do not omit value. Do not replace an EvidenceField with null, a string, "
             "or a list."
         )
+        lines.append(
+            "When status is \"present\", citation must be the section heading copied "
+            "exactly as it appears in the source document, including any leading "
+            "number or label, for example \"1. Document Control\" or "
+            "\"Clause Q2 - Periodic review\". A bare section number such as \"1\" is "
+            "not a heading and is not acceptable."
+        )
 
     lines.append("")
     lines.append(

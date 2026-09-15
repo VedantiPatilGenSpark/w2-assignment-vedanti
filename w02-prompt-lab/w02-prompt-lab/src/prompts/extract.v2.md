@@ -61,31 +61,31 @@ The document intentionally does not state a beneficial ownership threshold.
 
 {"document_status":"valid","policy_name":{"value":"Northglass Merchant Review Standard","status":"present","citation":"Northglass Merchant Review Standard"},"version":{"value":"2.3","status":"present","citation":"Northglass Merchant Review Standard"},"effective_date":{"value":"2026-02-10","status":"present","citation":"Northglass Merchant Review Standard"},"jurisdictions":{"value":["Norwyn","Bellwater District"],"status":"present","citation":"Article C - Jurisdiction"},"beneficial_ownership_threshold":{"value":null,"status":"absent","citation":null},"review_frequency":{"value":"at onboarding and after a material ownership change","status":"present","citation":"Article A - Scope"},"required_documents":{"value":["certificate of formation","current ownership register","tax registration","one bank statement dated within the previous ninety days"],"status":"present","citation":"Article B - Required evidence"}}
 
-Example 2 — contradictory information. The source gives two ownership thresholds for the
-same population. Do not choose one. Mark the document contradictory and the threshold
-ambiguous.
+Example 2 — superseded document. The source says it has been replaced by a later version.
+Still extract the fields the source supports, and use document_status "superseded".
+A stated threshold is present, not absent, and is written as a string.
 
 <document>
-# Redhaven Commercial Due Diligence Manual
-Version 6.4
-Effective date: 2026-03-22
+# Alder Quay Small Business Review Policy
+Version 1.8
+Effective date: 2025-05-04
+Status: Superseded
+Superseded by: Version 2.0 effective 2026-04-01
 
-## Part I - Ownership review
-A beneficial owner is any natural person holding 18 percent or more of the entity.
+## Clause Q1 - Scope
+This policy applies to small business deposit customers registered in the fictional province of
+Alder Quay.
 
-## Part II - Review triggers
-A review is required after a change of control, a legal-name change, or a sanctions-screening
-alert.
+## Clause Q2 - Periodic review
+Periodic review occurs every twenty-four months and after a material ownership change.
 
-## Schedule Z - Ownership table
-For entities registered in the fictional territory of East Kestrel, the beneficial ownership
-threshold is 24 percent.
+## Clause Q3 - Ownership threshold
+A natural person holding 21 percent or more is treated as a beneficial owner for this policy.
 
-The scope statement says East Kestrel entities follow the manual without a local exception.
-The body and Schedule Z therefore give conflicting thresholds for the same population.
+This document is retained only as a historical example and is no longer the current version.
 </document>
 
-{"document_status":"contradictory","policy_name":{"value":"Redhaven Commercial Due Diligence Manual","status":"present","citation":"Redhaven Commercial Due Diligence Manual"},"version":{"value":"6.4","status":"present","citation":"Redhaven Commercial Due Diligence Manual"},"effective_date":{"value":"2026-03-22","status":"present","citation":"Redhaven Commercial Due Diligence Manual"},"jurisdictions":{"value":"East Kestrel","status":"present","citation":"Schedule Z - Ownership table"},"beneficial_ownership_threshold":{"value":null,"status":"ambiguous","citation":null},"review_frequency":{"value":"after a change of control, a legal-name change, or a sanctions-screening alert","status":"present","citation":"Part II - Review triggers"},"required_documents":{"value":null,"status":"absent","citation":null}}
+{"document_status":"superseded","policy_name":{"value":"Alder Quay Small Business Review Policy","status":"present","citation":"Alder Quay Small Business Review Policy"},"version":{"value":"1.8","status":"present","citation":"Alder Quay Small Business Review Policy"},"effective_date":{"value":"2025-05-04","status":"present","citation":"Alder Quay Small Business Review Policy"},"jurisdictions":{"value":"Alder Quay","status":"present","citation":"Clause Q1 - Scope"},"beneficial_ownership_threshold":{"value":"21 percent or more","status":"present","citation":"Clause Q3 - Ownership threshold"},"review_frequency":{"value":"every twenty-four months and after a material ownership change","status":"present","citation":"Clause Q2 - Periodic review"},"required_documents":{"value":null,"status":"absent","citation":null}}
 
 Output
 
