@@ -67,6 +67,20 @@ One further citation (`S12`, `title`) is the bare section number `"1"` rather th
 `1. Newsletter`. It passes a substring check against the source but is not a heading, so the
 strict count would be 8 rather than 7.
 
+## Engineering checks
+
+`pytest` (23 passed) and `ruff check` are clean. `mypy` is clean for every file touched by Day 3
+work — `src/promptlab/`, `tests/test_schema_description.py`, and
+`tests/test_structured_contract.py`.
+
+Bare `mypy` reports 9 remaining errors, all `no-untyped-def`, in two starter test files that
+Day 3 does not modify: `tests/test_usage_contract.py` (1) and `tests/test_adapter_contract.py`
+(8). Each is a pytest fixture parameter (`tmp_path`, `monkeypatch`) or a `*args, **kwargs`
+signature that shipped without annotations, which `[tool.mypy] strict = true` over
+`files = ["src", "tests"]` rejects. Both files are unmodified from the `adding starter files`
+and `(fix) missing test_adapter_contract.py file added` commits, so these errors predate this
+branch and are left in place rather than editing shipped material.
+
 ## Other observations
 
 - `document_status` disagreed with `cases/gold/` on 5 of 24 cases: `S01` and `E01` were
