@@ -56,3 +56,11 @@ def test_schema_description_is_not_json_schema() -> None:
 
     assert "$schema" not in text
     assert '"properties"' not in text
+
+
+def test_schema_description_requires_evidence_field_value() -> None:
+    text = schema_description(SummarizationOutput)
+
+    assert "must include value" in text
+    assert "null" in text
+    assert "must include value" not in schema_description(TinyOutput)

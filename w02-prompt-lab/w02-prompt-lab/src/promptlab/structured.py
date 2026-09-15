@@ -77,6 +77,8 @@ def _repair_user_content(*, original: str, previous_text: str | None, error: str
         f"Validation error:\n{error}\n\n"
         f"Previous output:\n{previous}\n\n"
         "Correct only what the validation error concerns. "
+        "If status is absent, still include value set to null. "
+        "Do not omit value. Do not replace an EvidenceField with null. "
         "Return only a JSON object. Do not use Markdown.\n\n"
         f"Original instructions:\n{original}"
     )

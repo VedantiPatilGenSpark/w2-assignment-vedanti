@@ -32,7 +32,10 @@ use status: "present" only when the value is supported by the source
 
 when a field is present, set citation to the exact section heading that supports the value
 
-use the schema's absent representation when the source does not provide the field
+use the schema's absent representation when the source does not provide the field:
+{"value": null, "status": "absent", "citation": null}
+
+never omit value; never replace an evidence field with null
 
 use the schema's ambiguous representation when the source is conflicting or unclear
 
@@ -57,7 +60,7 @@ When the task cannot be completed
 If the marked text is not an applicable procedure, use the out-of-scope or non-valid document
 status defined by the supplied SummarizationOutput schema.
 
-Do not force unrelated content into procedure fields.
+Still return every evidence field as an object with value, status, and citation.
+Use {"value": null, "status": "absent", "citation": null} for fields the source does not support.
 
-Any field not supported by the source must use the schema's absent representation rather than
-a value supplied from model knowledge.
+Do not force unrelated content into procedure fields.

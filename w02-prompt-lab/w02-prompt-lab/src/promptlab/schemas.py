@@ -119,6 +119,15 @@ def schema_description(model: type[BaseModel]) -> str:
         for name, field_info in nested_model.model_fields.items():
             lines.append(_field_line(name, field_info, nested))
 
+    if any(model.__name__ == "EvidenceField" for model in nested):
+        lines.append("")
+        lines.append(
+            "Every EvidenceField is a JSON object and must include value. "
+            "If status is \"absent\", set value to null and citation to null. "
+            "Do not omit value. Do not replace an EvidenceField with null, a string, "
+            "or a list."
+        )
+
     lines.append("")
     lines.append(
         "Return exactly one JSON object whose top-level keys are exactly the field "
