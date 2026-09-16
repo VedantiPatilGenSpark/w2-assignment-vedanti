@@ -16,10 +16,12 @@ from promptlab.errors import (
     PermanentProviderError,
     TransientProviderError,
     TruncatedResponseError,
+    UnknownModelError,
 )
 from promptlab.usage import CallRecord, compute_cost
 
 REQUEST_TIMEOUT_SECONDS = 180.0
+_PERMANENT_STATUS_CODES = {400, 404, 422}
 
 
 class OllamaAdapter:
@@ -31,26 +33,120 @@ class OllamaAdapter:
     provider = "ollama"
 
     def __init__(self, model_id: str, *, think: bool | None = None) -> None:
+        known_ids = {config.model_id for config in Settings.from_env().models.values()}
+        if model_id not in known_ids:
+            raise UnknownModelError(model_id)
         self.model_id = model_id
         self.think = think
         self._settings = Settings.from_env()
 
     def complete(self, request: CompletionRequest, run_id: str) -> CompletionResult:
         records: list[CallRecord] = []
-        max_attempts = self._settings.max_retries + 1
+        max_attempts = min(1 + self._settings.max_retries, 3)
         last_text: str | None = None
         last_error: str | None = None
         succeeded = False
+        url = f"{self._settings.ollama_base_url}/api/generate"
 
         for attempt in range(1, max_attempts + 1):
             started = time.perf_counter()
+            text: str | None = None
+            input_tokens = 0
+            output_tokens = 0
+            stop_reason: str | None = None
             try:
-                response = httpx.post(
-                    f"{self._settings.ollama_base_url}/api/generate",
-                    json=self._generate_body(request),
-                    timeout=REQUEST_TIMEOUT_SECONDS,
+                try:
+                    response = httpx.post(
+                        url,
+                        json=self._generate_body(request),
+                        timeout=REQUEST_TIMEOUT_SECONDS,
+                    )
+                except (httpx.TimeoutException, httpx.TransportError) as exc:
+                    raise TransientProviderError(str(exc)) from exc
+
+                status_code = getattr(response, "status_code", None)
+                if status_code in _PERMANENT_STATUS_CODES:
+                    raise PermanentProviderError(f"Ollama returned HTTP {status_code}")
+                if isinstance(status_code, int) and status_code >= 500:
+                    raise TransientProviderError(f"Ollama returned HTTP {status_code}")
+                if isinstance(status_code, int) and status_code >= 400:
+                    raise PermanentProviderError(f"Ollama returned HTTP {status_code}")
+
+                try:
+                    payload = response.json()
+                except Exception as exc:
+                    raise PermanentProviderError("Ollama returned an unparseable body") from exc
+                if not isinstance(payload, dict):
+                    raise PermanentProviderError("Ollama returned an unparseable body")
+
+                text = _response_text(payload)
+                try:
+                    input_tokens = _require_int(payload, "prompt_eval_count")
+                    output_tokens = _require_int(payload, "eval_count")
+                    stop_reason = _optional_str(payload, "done_reason")
+                except (TypeError, KeyError) as exc:
+                    raise PermanentProviderError("Ollama usage fields were malformed") from exc
+
+                if stop_reason == "length":
+                    raise TruncatedResponseError("Response truncated by output-token ceiling")
+
+                latency_ms = _elapsed_ms(started)
+                succeeded = True
+                last_error = None
+                last_text = text
+                records.append(
+                    self._record(
+                        request=request,
+                        run_id=run_id,
+                        attempt=attempt,
+                        latency_ms=latency_ms,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        stop_reason=stop_reason,
+                        error_type=None,
+                        response_text=text,
+                    )
                 )
-            except httpx.RequestError:
+                break
+
+            except TruncatedResponseError as exc:
+                latency_ms = _elapsed_ms(started)
+                last_error = type(exc).__name__
+                last_text = text
+                records.append(
+                    self._record(
+                        request=request,
+                        run_id=run_id,
+                        attempt=attempt,
+                        latency_ms=latency_ms,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        stop_reason=stop_reason,
+                        error_type=last_error,
+                        response_text=last_text,
+                    )
+                )
+                break
+
+            except PermanentProviderError:
+                latency_ms = _elapsed_ms(started)
+                last_error = PermanentProviderError.__name__
+                records.append(
+                    self._record(
+                        request=request,
+                        run_id=run_id,
+                        attempt=attempt,
+                        latency_ms=latency_ms,
+                        input_tokens=0,
+                        output_tokens=0,
+                        stop_reason=None,
+                        error_type=last_error,
+                        response_text=None,
+                    )
+                )
+                break
+
+            except TransientProviderError:
                 latency_ms = _elapsed_ms(started)
                 last_error = TransientProviderError.__name__
                 records.append(
@@ -70,83 +166,6 @@ class OllamaAdapter:
                     _sleep_before_retry(attempt)
                     continue
                 break
-
-            latency_ms = _elapsed_ms(started)
-            if response.status_code >= 400:
-                last_error = PermanentProviderError.__name__
-                records.append(
-                    self._record(
-                        request=request,
-                        run_id=run_id,
-                        attempt=attempt,
-                        latency_ms=latency_ms,
-                        input_tokens=0,
-                        output_tokens=0,
-                        stop_reason=None,
-                        error_type=last_error,
-                        response_text=None,
-                    )
-                )
-                break
-
-            payload = response.json()
-            if not isinstance(payload, dict):
-                last_error = PermanentProviderError.__name__
-                records.append(
-                    self._record(
-                        request=request,
-                        run_id=run_id,
-                        attempt=attempt,
-                        latency_ms=latency_ms,
-                        input_tokens=0,
-                        output_tokens=0,
-                        stop_reason=None,
-                        error_type=last_error,
-                        response_text=None,
-                    )
-                )
-                break
-
-            text = _response_text(payload)
-            input_tokens = _require_int(payload, "prompt_eval_count")
-            output_tokens = _require_int(payload, "eval_count")
-            stop_reason = _optional_str(payload, "done_reason")
-
-            if stop_reason == "length":
-                last_error = TruncatedResponseError.__name__
-                last_text = text
-                records.append(
-                    self._record(
-                        request=request,
-                        run_id=run_id,
-                        attempt=attempt,
-                        latency_ms=latency_ms,
-                        input_tokens=input_tokens,
-                        output_tokens=output_tokens,
-                        stop_reason=stop_reason,
-                        error_type=last_error,
-                        response_text=text,
-                    )
-                )
-                break
-
-            succeeded = True
-            last_error = None
-            last_text = text
-            records.append(
-                self._record(
-                    request=request,
-                    run_id=run_id,
-                    attempt=attempt,
-                    latency_ms=latency_ms,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    stop_reason=stop_reason,
-                    error_type=None,
-                    response_text=text,
-                )
-            )
-            break
 
         return CompletionResult(
             succeeded=succeeded,

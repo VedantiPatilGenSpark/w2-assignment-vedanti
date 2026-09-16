@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import get_args
 
 import httpx
@@ -12,6 +13,7 @@ from promptlab.errors import (
     PermanentProviderError,
     TransientProviderError,
     TruncatedResponseError,
+    UnknownModelError,
 )
 from promptlab.usage import CallRecord
 
@@ -129,12 +131,14 @@ class FakeResponse:
         return self._payload
 
 
-def test_success_maps_ollama_usage_into_call_record(monkeypatch, tmp_path) -> None:
+def test_success_maps_ollama_usage_into_call_record(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.chdir(tmp_path)
 
     calls = 0
 
-    def fake_post(*args, **kwargs) -> FakeResponse:
+    def fake_post(*args: object, **kwargs: object) -> FakeResponse:
         nonlocal calls
         calls += 1
         return FakeResponse(
@@ -165,14 +169,14 @@ def test_success_maps_ollama_usage_into_call_record(monkeypatch, tmp_path) -> No
 
 
 def test_transient_failure_retries_and_records_each_attempt(
-    monkeypatch,
-    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.chdir(tmp_path)
 
     calls = 0
 
-    def flaky_post(*args, **kwargs) -> FakeResponse:
+    def flaky_post(*args: object, **kwargs: object) -> FakeResponse:
         nonlocal calls
         calls += 1
         if calls < 3:
@@ -193,12 +197,14 @@ def test_transient_failure_retries_and_records_each_attempt(
     assert result.records[2].error_type is None
 
 
-def test_permanent_failure_is_not_retried(monkeypatch, tmp_path) -> None:
+def test_permanent_failure_is_not_retried(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.chdir(tmp_path)
 
     calls = 0
 
-    def bad_request(*args, **kwargs) -> FakeResponse:
+    def bad_request(*args: object, **kwargs: object) -> FakeResponse:
         nonlocal calls
         calls += 1
         return FakeResponse(status_code=400, text="bad request")
@@ -216,12 +222,14 @@ def test_permanent_failure_is_not_retried(monkeypatch, tmp_path) -> None:
     assert result.records[0].error_type == PermanentProviderError.__name__
 
 
-def test_truncation_is_recorded_and_not_retried(monkeypatch, tmp_path) -> None:
+def test_truncation_is_recorded_and_not_retried(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.chdir(tmp_path)
 
     calls = 0
 
-    def truncated(*args, **kwargs) -> FakeResponse:
+    def truncated(*args: object, **kwargs: object) -> FakeResponse:
         nonlocal calls
         calls += 1
         return FakeResponse(
@@ -245,3 +253,33 @@ def test_truncation_is_recorded_and_not_retried(monkeypatch, tmp_path) -> None:
     assert record.attempt == 1
     assert record.stop_reason == "length"
     assert record.error_type == TruncatedResponseError.__name__
+
+
+def test_unknown_model_id_is_rejected() -> None:
+    with pytest.raises(UnknownModelError):
+        OllamaAdapter(model_id="not-a-configured-model")
+
+
+def test_server_error_is_retried_then_succeeds(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    calls = 0
+
+    def flaky_server(*args: object, **kwargs: object) -> FakeResponse:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return FakeResponse(status_code=500, text="unavailable")
+        return FakeResponse(text="recovered")
+
+    monkeypatch.setattr(httpx, "post", flaky_server)
+    monkeypatch.setattr("time.sleep", lambda _: None)
+
+    adapter = OllamaAdapter(model_id=_model_id("mistral"))
+    result = adapter.complete(_request(), "server-error-run")
+
+    assert calls == 2
+    assert result.succeeded is True
+    assert result.records[0].error_type == TransientProviderError.__name__
+    assert result.records[1].error_type is None

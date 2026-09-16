@@ -70,27 +70,39 @@ def call_ollama(
     model_id: str,
     prompt: str,
     num_predict: int,
-) -> tuple[dict[str, Any], int]:
+) -> tuple[dict[str, Any], int, str | None]:
     started = time.perf_counter()
-    response = httpx.post(
-        f"{settings.ollama_base_url}/api/generate",
-        json={
-            "model": model_id,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": TEMPERATURE,
-                "num_predict": num_predict,
+    try:
+        response = httpx.post(
+            f"{settings.ollama_base_url}/api/generate",
+            json={
+                "model": model_id,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": TEMPERATURE,
+                    "num_predict": num_predict,
+                },
             },
-        },
-        timeout=REQUEST_TIMEOUT_SECONDS,
-    )
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+    except httpx.HTTPError as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        return {}, latency_ms, type(exc).__name__
+
     latency_ms = int((time.perf_counter() - started) * 1000)
-    response.raise_for_status()
-    payload: Any = response.json()
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        return {}, latency_ms, type(exc).__name__
+
+    try:
+        payload: Any = response.json()
+    except ValueError:
+        return {}, latency_ms, "JSONDecodeError"
     if not isinstance(payload, dict):
-        raise TypeError("Ollama must return a JSON object")
-    return payload, latency_ms
+        return {}, latency_ms, "TypeError"
+    return payload, latency_ms, None
 
 
 def build_record(
@@ -104,8 +116,16 @@ def build_record(
     latency_ms: int,
     error_type: str | None,
 ) -> CallRecord:
-    input_tokens = require_int(payload, "prompt_eval_count")
-    output_tokens = require_int(payload, "eval_count")
+    if error_type is not None and not payload:
+        input_tokens = 0
+        output_tokens = 0
+        stop_reason = None
+        response_text = None
+    else:
+        input_tokens = require_int(payload, "prompt_eval_count")
+        output_tokens = require_int(payload, "eval_count")
+        stop_reason = optional_str(payload, "done_reason")
+        response_text = optional_str(payload, "response")
     return CallRecord(
         record_id=str(uuid.uuid4()),
         run_id=run_id,
@@ -124,10 +144,42 @@ def build_record(
         cached_input_tokens=None,
         latency_ms=latency_ms,
         cost_usd=compute_cost(model_id, input_tokens, output_tokens),
-        stop_reason=optional_str(payload, "done_reason"),
+        stop_reason=stop_reason,
         error_type=error_type,
-        response_text=optional_str(payload, "response"),
+        response_text=response_text,
     )
+
+
+def record_attempt(
+    *,
+    settings: Settings,
+    model_id: str,
+    run_id: str,
+    case_id: str,
+    prompt: str,
+    attempt: int,
+    num_predict: int,
+) -> CallRecord:
+    payload, latency_ms, transport_error = call_ollama(
+        settings, model_id, prompt, num_predict
+    )
+    error_type = transport_error
+    if error_type is None:
+        stop_reason = optional_str(payload, "done_reason")
+        if stop_reason == "length":
+            error_type = "TruncatedResponseError"
+    record = build_record(
+        run_id=run_id,
+        model_id=model_id,
+        case_id=case_id,
+        attempt=attempt,
+        num_predict=num_predict,
+        payload=payload,
+        latency_ms=latency_ms,
+        error_type=error_type,
+    )
+    append_record(record, run_id)
+    return record
 
 
 def main() -> None:
@@ -139,41 +191,31 @@ def main() -> None:
 
     for case_id in CASE_IDS:
         prompt = template.replace("{document_text}", cases[case_id])
-        payload, latency_ms = call_ollama(settings, model_id, prompt, NORMAL_NUM_PREDICT)
-        record = build_record(
-            run_id=run_id,
+        record = record_attempt(
+            settings=settings,
             model_id=model_id,
+            run_id=run_id,
             case_id=case_id,
+            prompt=prompt,
             attempt=1,
             num_predict=NORMAL_NUM_PREDICT,
-            payload=payload,
-            latency_ms=latency_ms,
-            error_type=None,
         )
-        append_record(record, run_id)
         print(
             f"{case_id} stop={record.stop_reason} "
             f"input={record.input_tokens} output={record.output_tokens} "
-            f"latency_ms={record.latency_ms}"
+            f"latency_ms={record.latency_ms} error_type={record.error_type}"
         )
 
     truncated_prompt = template.replace("{document_text}", cases["E11"])
-    truncated_payload, truncated_latency_ms = call_ollama(
-        settings, model_id, truncated_prompt, TRUNCATION_NUM_PREDICT
-    )
-    truncated_stop = optional_str(truncated_payload, "done_reason")
-    truncated_error = "TruncatedResponseError" if truncated_stop == "length" else None
-    truncated_record = build_record(
-        run_id=run_id,
+    truncated_record = record_attempt(
+        settings=settings,
         model_id=model_id,
+        run_id=run_id,
         case_id="E11",
+        prompt=truncated_prompt,
         attempt=2,
         num_predict=TRUNCATION_NUM_PREDICT,
-        payload=truncated_payload,
-        latency_ms=truncated_latency_ms,
-        error_type=truncated_error,
     )
-    append_record(truncated_record, run_id)
     print(
         f"E11 truncation demo stop={truncated_record.stop_reason} "
         f"error_type={truncated_record.error_type}"
