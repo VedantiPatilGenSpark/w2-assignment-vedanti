@@ -47,6 +47,18 @@ def test_triage_prompts_are_layered_and_v1_omits_analysis() -> None:
     assert "analysis" not in v1.user_template.lower()
     assert "analysis" in v2.system.lower()
     assert "analysis" in v2.user_template.lower()
+    for template in (v1, v2):
+        system = template.system.lower()
+        user = template.user_template.lower()
+        assert "escalation_required" in system
+        assert 'true only if queue is "escalate"' in system
+        assert "confidence" in system
+        assert "1.0" in template.system
+        assert "citing the exact customer phrasing" in system
+        assert "confidence" in user
+        assert "one-line citation" in user
+    assert "debate between categories" in v2.system.lower()
+    assert "category debate" in v2.user_template.lower()
 
 
 def test_render_user_fills_customer_fence() -> None:
