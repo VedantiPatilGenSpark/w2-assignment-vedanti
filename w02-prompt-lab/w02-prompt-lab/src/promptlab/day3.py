@@ -179,6 +179,7 @@ def run_case(
         repairs=repairs,
         output=output,
         error=error,
+        case_latency_ms=trace.elapsed_ms,
     )
     append_output_record(outputs_path, record)
     print(

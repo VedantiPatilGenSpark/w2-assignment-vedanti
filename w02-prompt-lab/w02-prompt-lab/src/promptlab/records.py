@@ -44,6 +44,7 @@ class OutputRecord(Record):
     repairs: int
     output: dict[str, Any] | None
     error: str | None = None
+    case_latency_ms: int | None = None
 
 
 class ScoreRecord(Record):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 
 import pytest
@@ -213,3 +214,54 @@ def test_trace_records_accumulate_across_calls_in_order() -> None:
         '{"wrong": "shape"}',
         '{"value": "fixed"}',
     ]
+
+
+def test_complete_structured_records_elapsed_ms_on_success_and_failure() -> None:
+    success_trace = StructuredCallTrace()
+    complete_structured(
+        ScriptedAdapter([_result('{"value": "ok"}')]),
+        _request(),
+        Answer,
+        "fixture-run",
+        trace=success_trace,
+    )
+    assert success_trace.elapsed_ms is not None
+    assert success_trace.elapsed_ms >= 0
+
+    failure_trace = StructuredCallTrace()
+    with pytest.raises(StructuredCompletionError):
+        complete_structured(
+            ScriptedAdapter([_result(None, error_type="connection_error")]),
+            _request(),
+            Answer,
+            "fixture-run",
+            trace=failure_trace,
+        )
+    assert failure_trace.elapsed_ms is not None
+    assert failure_trace.elapsed_ms >= 0
+
+
+class _DelayedAdapter(ScriptedAdapter):
+    def __init__(self, responses: list[CompletionResult], delay_s: float) -> None:
+        super().__init__(responses)
+        self.delay_s = delay_s
+
+    def complete(self, request: CompletionRequest, run_id: str) -> CompletionResult:
+        time.sleep(self.delay_s)
+        return super().complete(request, run_id)
+
+
+def test_case_elapsed_ms_is_not_the_sum_of_attempt_latencies() -> None:
+    adapter = _DelayedAdapter(
+        [_result('{"wrong": "shape"}'), _result('{"value": "fixed"}', attempt=2)],
+        delay_s=0.03,
+    )
+    trace = StructuredCallTrace()
+
+    complete_structured(adapter, _request(), Answer, "fixture-run", max_repairs=1, trace=trace)
+
+    attempt_total = sum(record.latency_ms for record in trace.records)
+    assert [record.latency_ms for record in trace.records] == [7, 7]
+    assert trace.elapsed_ms is not None
+    assert trace.elapsed_ms >= 60
+    assert trace.elapsed_ms > attempt_total

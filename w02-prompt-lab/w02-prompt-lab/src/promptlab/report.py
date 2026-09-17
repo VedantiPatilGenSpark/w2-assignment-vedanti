@@ -121,6 +121,25 @@ def _usage_summary(
     )
 
 
+def _case_latency_summary(
+    records: Sequence[OutputRecord],
+) -> tuple[str, str, str]:
+    """Return median/max case latency from complete_structured wall clocks."""
+
+    latencies = [
+        float(latency)
+        for row in records
+        if (latency := row.case_latency_ms) is not None
+    ]
+    if not latencies:
+        return "—", "—", "0"
+    return (
+        f"{_fmt_number(float(median(latencies)))} ms",
+        f"{_fmt_number(float(max(latencies)))} ms",
+        str(len(latencies)),
+    )
+
+
 def _output_summary(
     records: Sequence[OutputRecord],
 ) -> tuple[str, str, str]:
@@ -180,7 +199,9 @@ def _write_report(
         f"Run ID: `{run_id}`",
         "",
         "Counts are reported with their denominators. "
-        "Latency uses median and maximum rather than mean.",
+        "Latency uses median and maximum rather than mean. "
+        "Attempt latency is one HTTP POST; case latency is one "
+        "`complete_structured` wall clock.",
         "",
     ]
 
@@ -202,9 +223,10 @@ def _write_report(
                 "",
                 "| Model | Prompt | Valid outputs | Metrics | Input tokens/case | "
                 "Output tokens/case | Median latency | Max latency | n | "
+                "Median case latency | Max case latency | n cases | "
                 "Repairs | Retries | Final failures |",
                 "| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | "
-                "---: | ---: | ---: |",
+                "---: | ---: | ---: | ---: | ---: | ---: |",
             ]
         )
 
@@ -227,6 +249,7 @@ def _write_report(
             ) = _usage_summary(u)
 
             valid_outputs, repairs, failures = _output_summary(o)
+            median_case_latency, max_case_latency, n_cases = _case_latency_summary(o)
             metric_text = _metric_text(s)
             prompt_id = ""
             sample = o[0] if o else (u[0] if u else None)
@@ -250,8 +273,9 @@ def _write_report(
                 "| "
                 f"{model_name} | {prompt_cell} | {valid_outputs} | "
                 f"{metric_text} | {input_cell} | {output_cell} | "
-                f"{median_latency} | {max_latency} | {n} | {repairs} | "
-                f"{retries} | {failures} |"
+                f"{median_latency} | {max_latency} | {n} | "
+                f"{median_case_latency} | {max_case_latency} | {n_cases} | "
+                f"{repairs} | {retries} | {failures} |"
             )
 
         lines.append("")
@@ -268,6 +292,10 @@ def _write_report(
             "- Untested combinations (other prompt versions, other decoding settings) are "
             "not claimed.",
             "- Local Ollama latency depends on lab hardware and is not a production SLO.",
+            "- Attempt latency (`n`) is one HTTP POST. Case latency (`n cases`) is one "
+            "`complete_structured` call, including transport retries, backoff, "
+            "validation, and at most one repair. A repair raises attempt `n` without "
+            "adding a case.",
             "- Local Ollama provider/API charge is `$0.00`; token usage and latency still "
             "represent real operational work.",
             "",

@@ -160,6 +160,7 @@ def run_version(
                 repairs=trace.repairs,
                 output=validated.model_dump(),
                 error=None,
+                case_latency_ms=trace.elapsed_ms,
             )
         except StructuredCompletionError as exc:
             record = OutputRecord(
@@ -173,6 +174,7 @@ def run_version(
                 repairs=exc.trace.repairs,
                 output=None,
                 error=str(exc),
+                case_latency_ms=exc.trace.elapsed_ms,
             )
         for call in trace.records:
             append_call_record(call, run_id)

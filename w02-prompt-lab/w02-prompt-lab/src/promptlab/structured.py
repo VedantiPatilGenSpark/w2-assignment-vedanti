@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 
@@ -20,6 +21,7 @@ class StructuredCallTrace:
     repairs: int = 0
     first_error: str | None = None
     final_error: str | None = None
+    elapsed_ms: int | None = None
 
 
 class StructuredCompletionError(RuntimeError):
@@ -51,10 +53,36 @@ def complete_structured[T: BaseModel](
     On validation failure, send the validation error text back to the model and
     instruct it to correct only what the error concerns. Do not perform more
     than max_repairs semantic repair attempts.
+
+    Wall-clock duration of this call is stored on ``trace.elapsed_ms``. That is
+    one case, including adapter retries, backoff, parse/validate, and repair.
+    Per-HTTP ``CallRecord.latency_ms`` is unchanged.
     """
     if trace is None:
         trace = StructuredCallTrace()
 
+    started = time.perf_counter()
+    try:
+        return _complete_structured(
+            adapter,
+            request,
+            schema,
+            run_id,
+            max_repairs,
+            trace,
+        )
+    finally:
+        trace.elapsed_ms = int((time.perf_counter() - started) * 1000)
+
+
+def _complete_structured[T: BaseModel](
+    adapter: ModelAdapter,
+    request: CompletionRequest,
+    schema: type[T],
+    run_id: str,
+    max_repairs: int,
+    trace: StructuredCallTrace,
+) -> T:
     result = adapter.complete(request, run_id)
     trace.records.extend(result.records)
     raw_text = result.text

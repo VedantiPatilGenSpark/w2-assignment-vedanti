@@ -320,6 +320,7 @@ def run_case(
             repairs=trace.repairs,
             output=parsed.model_dump(),
             error=None,
+            case_latency_ms=trace.elapsed_ms,
         )
         case_scores = score_output(
             run_id=run_id,
@@ -347,6 +348,7 @@ def run_case(
             repairs=exc.trace.repairs,
             output=None,
             error=str(exc),
+            case_latency_ms=exc.trace.elapsed_ms,
         )
         case_scores = score_output(
             run_id=run_id,
