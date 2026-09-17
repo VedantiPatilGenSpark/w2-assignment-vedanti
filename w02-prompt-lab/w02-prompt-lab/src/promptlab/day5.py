@@ -23,6 +23,7 @@ from promptlab.adapters.base import CompletionRequest
 from promptlab.adapters.ollama import OllamaAdapter
 from promptlab.config import PROJECT_ROOT, Settings
 from promptlab.corpus import GoldLabel, load_cases, validate_corpus
+from promptlab.day2 import _think_from_args, _think_label
 from promptlab.prompts import load, render_user, substitute
 from promptlab.records import OutputRecord, ScoreRecord, UsageRecord, load_records
 from promptlab.records import append_record as append_jsonl
@@ -85,6 +86,15 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Validate configuration and corpus without calling Ollama",
     )
+    parser.add_argument(
+        "--think",
+        choices=("true", "false"),
+        default="false",
+        help=(
+            "Send Ollama think=true/false for both models. Day 5 defaults to false "
+            "so Qwen does not spend the output budget on thinking tokens."
+        ),
+    )
     return parser
 
 
@@ -99,11 +109,11 @@ def _selected_models(settings: Settings, requested: str | None) -> list[str]:
     return [requested]
 
 
-def _adapter_for(settings: Settings, logical_name: str) -> OllamaAdapter:
+def _adapter_for(
+    settings: Settings, logical_name: str, think: bool | None
+) -> OllamaAdapter:
     model = settings.models[logical_name]
-    # think=False keeps the Ollama request shape identical across models. Day 2
-    # showed Qwen's default thinking consumes the output budget and truncates.
-    return OllamaAdapter(model_id=model.model_id, think=False)
+    return OllamaAdapter(model_id=model.model_id, think=think)
 
 
 def build_request(
@@ -373,6 +383,7 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     settings = Settings.from_env()
+    think = _think_from_args(args.think)
     run_id = args.run_id or str(uuid4())
     if not re.fullmatch(RUN_ID_PATTERN, run_id):
         raise SystemExit("--run-id must use letters, numbers, '.', '_' or '-'")
@@ -381,6 +392,7 @@ def main(argv: list[str] | None = None) -> None:
     limit = args.limit
     if limit is not None and limit < 1:
         raise SystemExit("--limit must be at least 1")
+    print(f"think={_think_label(think)}")
 
     run_dir = PROJECT_ROOT / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -403,7 +415,7 @@ def main(argv: list[str] | None = None) -> None:
             pairs = pairs[:limit]
         labels_by_task[task] = [gold for _case, gold in pairs]
         for logical_name in selected_models:
-            adapter = _adapter_for(settings, logical_name)
+            adapter = _adapter_for(settings, logical_name, think)
             for case, gold in pairs:
                 output_record, case_scores, validated = run_case(
                     adapter=adapter,

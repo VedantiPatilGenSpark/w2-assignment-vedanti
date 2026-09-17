@@ -5,8 +5,10 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
+from promptlab.config import Settings
 from promptlab.corpus import validate_corpus
-from promptlab.day5 import TASK_SPECS, build_request
+from promptlab.day2 import _think_from_args
+from promptlab.day5 import TASK_SPECS, _adapter_for, _parser, build_request
 from promptlab.prompts import load
 from promptlab.rules import VersionCandidate, select_current_version
 from promptlab.schemas import schema_description
@@ -29,6 +31,17 @@ def test_task_prompts_are_the_measured_day5_versions() -> None:
     assert TASK_SPECS["triage"].version == "v1"
     for spec in TASK_SPECS.values():
         load(spec.prompt_id, spec.version)
+
+
+def test_think_defaults_false_on_both_configured_adapters() -> None:
+    args = _parser().parse_args([])
+    assert args.think == "false"
+    think = _think_from_args(args.think)
+    assert think is False
+    settings = Settings.from_env()
+    for logical_name in settings.models:
+        adapter = _adapter_for(settings, logical_name, think)
+        assert adapter.think is False
 
 
 def test_build_request_goes_through_prompt_registry() -> None:
