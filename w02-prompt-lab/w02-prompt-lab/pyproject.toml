@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
-promptlab = "promptlab.run:main"
+promptlab = "promptlab.day5:main"
 
 [dependency-groups]
 dev = [
